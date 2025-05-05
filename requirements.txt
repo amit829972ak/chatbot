@@ -9,3 +9,4 @@ requests==2.31.0
 python-dotenv==1.0.0
 pickle-mixin==1.0.2
 hashlib==20081119
+pip==25.1.1
