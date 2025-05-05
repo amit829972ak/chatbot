@@ -641,6 +641,7 @@ def analyze_query(query):
         return result
     except Exception as e:
         # Default to general information if analysis fails
+        st.error(f"Error analyzing query: {str(e)}")
         return {
             "question_type": "general_info",
             "department": "General"
@@ -687,6 +688,7 @@ def analyze_document(text, document_name):
         result["document_name"] = document_name
         return result
     except Exception as e:
+        st.error(f"Error analyzing document: {str(e)}")
         return {
             "summary": f"Error analyzing document: {str(e)}",
             "topics": [],
@@ -818,7 +820,7 @@ def show_document_upload():
                 vector_store=st.session_state.vector_store
             )
             
-            if document_text and not metadata.get("error"):
+            if document_text and "error" not in metadata:  # FIX: Check if error key exists
                 st.success(f"Document '{uploaded_file.name}' added to knowledge base!")
                 
                 with st.expander("Document Analysis", expanded=False):
@@ -826,9 +828,14 @@ def show_document_upload():
                     st.write("**Department:**", metadata.get("department", "General"))
                     st.write("**Document Type:**", metadata.get("document_type", "Unknown"))
                     
-                    st.write("**Key Topics:**")
-                    for topic in metadata.get("topics", []):
-                        st.write(f"- {topic}")
+                    # FIX: Check if topics is a list before iterating
+                    topics = metadata.get("topics", [])
+                    if topics and isinstance(topics, list):
+                        st.write("**Key Topics:**")
+                        for topic in topics:
+                            st.write(f"- {topic}")
+                    else:
+                        st.write("**Key Topics:** Not available")
             else:
                 st.error(f"Failed to process document: {metadata.get('error', 'Unknown error')}")
 
@@ -885,209 +892,220 @@ def create_sidebar():
                 with st.expander(f"About {selected_department}", expanded=False):
                     st.write(department_info.get("description", "No description available."))
                     
-                    st.subheader("Key Contacts")
-                    for role, contact in department_info.get("key_contacts", {}).items():
-                        st.write(f"**{role.title()}:** {contact}")
+                    # FIX: Check if key_contacts is a dictionary before iterating
+                    key_contacts = department_info.get("key_contacts", {})
+                    if key_contacts and isinstance(key_contacts, dict):
+                        st.subheader("Key Contacts")
+                        for role, contact in key_contacts.items():
+                            st.write(f"**{role.title()}:** {contact}")
                     
-                    st.subheader("Common Topics")
-                    for topic in department_info.get("common_topics", []):
-                        st.write(f"- {topic}")
+                    # FIX: Check if common_topics is a list before iterating
+                    common_topics = department_info.get("common_topics", [])
+                    if common_topics and isinstance(common_topics, list):
+                        st.subheader("Common Topics")
+                        for topic in common_topics:
+                            st.write(f"- {topic}")
         
         # Document upload section
         st.subheader("Document Management")
         
         # Only show upload if user has permission
-        if check_permission("modify_info", st.session_state.user_role, selected_department):
+        if check_permission("modify_info", st.session_state.user_role, st.session_state.selected_department):
             show_document_upload()
         else:
-            st.info("You need higher permissions to upload documents.")
-        
-        # Clear chat history button
-        st.subheader("Chat Options")
-        if st.button("Clear Chat History"):
-            st.session_state.chat_history = []
-            st.session_state.messages = []
-            st.rerun()
+            st.info("You don't have permission to upload documents. Please contact a department head or administrator.")
 
 
-def display_chat_messages():
-    """Display all chat messages."""
-    # Create a container for chat messages
-    chat_container = st.container()
+def display_faqs(department):
+    """Display department FAQs."""
+    faqs = get_department_faqs(department)
     
-    with chat_container:
-        # Check if there are messages to display
-        if not st.session_state.messages:
-            return
-        
-        # Display all messages
-        for message in st.session_state.messages:
-            if message["role"] == "user":
-                st.chat_message("user").write(message["content"])
-            else:
-                st.chat_message("assistant").write(message["content"])
+    if not faqs:
+        st.info(f"No FAQs available for {department} department.")
+        return
+    
+    st.subheader(f"{department} Department FAQs")
+    
+    for i, faq in enumerate(faqs):
+        with st.expander(f"Q: {faq['question']}", expanded=False):
+            st.write(f"A: {faq['answer']}")
 
 
-def process_user_input(user_input):
-    """
-    Process user input and generate a response.
+def chat_interface():
+    """Display the main chat interface."""
+    st.title("Enterprise Knowledge Hub Assistant")
     
-    Args:
-        user_input (str): The user's query
-    """
-    # Add user message to chat
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    
-    # Display user message
-    st.chat_message("user").write(user_input)
-    
-    # Display thinking message
-    with st.chat_message("assistant"):
-        response_placeholder = st.empty()
-        response_placeholder.markdown("Thinking...")
-        
-        # 1. Analyze the query using OpenAI
-        query_analysis = analyze_query(user_input)
-        
-        # 2. Search for relevant information in vector store
-        search_results = st.session_state.vector_store.search(user_input, k=3)
-        context = ""
-        if search_results:
-            context = "\n\n".join([result["document"] for result in search_results])
-        
-        # 3. Check if we need to fetch data from external systems
-        department = query_analysis.get("department", st.session_state.selected_department)
-        webhook_data = None
-        
-        if query_analysis.get("question_type") == "data_request":
-            # Determine which webhook to use based on the query
-            if "CRM" in user_input or "customer" in user_input.lower() or "client" in user_input.lower():
-                webhook_data = st.session_state.webhook_handler.fetch_crm_data({
-                    "query": user_input,
-                    "department": department
-                })
-            elif "MCP" in user_input or "Microsoft" in user_input or "document" in user_input.lower():
-                webhook_data = st.session_state.webhook_handler.fetch_document_from_mcp(
-                    document_name=user_input
-                )
-        
-        # 4. Get department FAQs for additional context
-        faqs = get_department_faqs(st.session_state.selected_department)
-        faq_context = ""
-        if faqs:
-            faq_context = "Frequently Asked Questions:\n" + "\n".join([
-                f"Q: {faq['question']}\nA: {faq['answer']}" for faq in faqs
-            ])
-        
-        # 5. Combine all context
-        full_context = ""
-        if context:
-            full_context += f"Knowledge base information:\n{context}\n\n"
-        if faq_context:
-            full_context += f"{faq_context}\n\n"
-        if webhook_data and not webhook_data.get("error"):
-            full_context += f"External system data:\n{str(webhook_data)}\n\n"
-        
-        # 6. Generate response
-        response = generate_response(
-            user_input, 
-            context=full_context, 
-            department=st.session_state.selected_department
-        )
-        
-        # 7. Update UI with response
-        response_placeholder.markdown(response)
-    
-    # 8. Add assistant message to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response})
-    
-    # 9. Add to chat history (for tracking complete conversations)
-    st.session_state.chat_history.append({
-        "query": user_input,
-        "response": response,
-        "department": st.session_state.selected_department,
-        "timestamp": time.time()
-    })
-
-
-def create_chat_interface():
-    """Create the chat interface component."""
-    # Initialize the vector store if not already done
-    if "vector_store" not in st.session_state:
-        st.session_state.vector_store = VectorStore()
-    
-    # Initialize webhook handler if not already done
-    if "webhook_handler" not in st.session_state:
-        st.session_state.webhook_handler = WebhookHandler()
-    
-    # Display chat messages
-    display_chat_messages()
-    
-    # Chat input
-    with st.container():
-        st.write("")
-        user_input = st.chat_input("Type your question here...")
-        
-        if user_input:
-            process_user_input(user_input)
-
-
-def initialize_session_state():
-    """Initialize session state variables."""
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-    
-    if "selected_department" not in st.session_state:
-        st.session_state.selected_department = DEPARTMENTS[0]
-    
-    if "user_role" not in st.session_state:
-        st.session_state.user_role = USER_ROLES[2]  # Set default to "Department Head" for document upload access
-    
-    if "documents" not in st.session_state:
-        st.session_state.documents = {}
-        
+    # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
     
-    if "query_engine" not in st.session_state:
-        st.session_state.query_engine = None
-
-
-# Set page configuration
-st.set_page_config(
-    page_title="Enterprise Knowledge Hub",
-    page_icon="🤖",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-def main():
-    # Initialize session state variables
-    initialize_session_state()
+    # Display chat history
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
     
-    # Create sidebar with department selection and user role
-    create_sidebar()
+    # Chat input
+    if prompt := st.chat_input("Ask a question about the company..."):
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Analyze query
+        analysis = analyze_query(prompt)
+        query_type = analysis.get("question_type", "general_info")
+        relevant_dept = analysis.get("department", "General")
+        
+        # Get relevant context from vector store
+        search_results = st.session_state.vector_store.search(prompt, k=3)
+        context = "\n\n".join([result["document"] for result in search_results]) if search_results else ""
+        
+        # Display assistant response
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                # Generate response considering department context
+                department_context = st.session_state.selected_department
+                
+                # For specific questions about other departments, use that department's context
+                if relevant_dept in DEPARTMENTS and relevant_dept != "General":
+                    department_context = relevant_dept
+                
+                response = generate_response(prompt, context, department_context)
+                st.markdown(response)
+                
+                # Add assistant response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                
+                # If query relates to documents, show reference documents
+                if query_type in ["specific_document", "data_request"] and search_results:
+                    with st.expander("Reference Documents", expanded=False):
+                        for i, result in enumerate(search_results):
+                            metadata = result.get("metadata", {})
+                            doc_name = metadata.get("document_name", f"Document {i+1}")
+                            doc_type = metadata.get("document_type", "Unknown")
+                            st.write(f"**{doc_name}** ({doc_type})")
+                            st.write(f"Relevance score: {1 / (1 + result['score']):.2f}")
+
+
+def department_dashboard():
+    """Display department-specific dashboard."""
+    department = st.session_state.selected_department
     
-    # Main page content
+    st.title(f"{department} Department Dashboard")
+    
+    # Display department FAQs
+    display_faqs(department)
+    
+    # Display department-specific documents
+    st.subheader("Department Documents")
+    
+    # Search for documents related to this department
+    department_docs = []
+    
+    # Check all documents in the vector store
+    for doc_id, doc_data in st.session_state.vector_store.documents.items():
+        metadata = doc_data.get("metadata", {})
+        doc_department = metadata.get("department", "")
+        
+        if doc_department == department:
+            department_docs.append((doc_id, doc_data))
+    
+    if not department_docs:
+        st.info(f"No documents found for {department} department.")
+    else:
+        for doc_id, doc_data in department_docs:
+            metadata = doc_data.get("metadata", {})
+            doc_name = metadata.get("document_name", "Unnamed Document")
+            doc_type = metadata.get("document_type", "Unknown")
+            
+            with st.expander(f"{doc_name} ({doc_type})", expanded=False):
+                st.write("**Summary:**", metadata.get("summary", "No summary available"))
+                
+                # Show topics if available
+                topics = metadata.get("topics", [])
+                if topics and isinstance(topics, list):
+                    st.write("**Topics:**")
+                    for topic in topics:
+                        st.write(f"- {topic}")
+                
+                # Show document preview (first 200 characters)
+                doc_text = doc_data.get("text", "")
+                if doc_text:
+                    st.write("**Preview:**")
+                    st.write(doc_text[:200] + "..." if len(doc_text) > 200 else doc_text)
+
+
+def login_screen():
+    """Display login interface."""
     st.title("Enterprise Knowledge Hub")
     
-    # Display welcome message if no conversation started
-    if not st.session_state.chat_history:
-        st.markdown("""
-        ### Welcome to the Enterprise Knowledge Hub
-        
-        I can help you with information about:
-        - HR policies and procedures
-        - Finance and accounting inquiries
-        - Marketing resources and guidelines
-        - IT support and technical documentation
-        - Sales data and CRM information
-        
-        Just type your question to get started!
-        """)
+    col1, col2 = st.columns([1, 1])
     
-    # Create chat interface
-    create_chat_interface()
+    with col1:
+        st.image("https://via.placeholder.com/300x150?text=Company+Logo", width=300)
+    
+    with col2:
+        st.subheader("Login")
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        
+        if st.button("Login"):
+            # Authenticate user
+            is_authenticated, user_role = authenticate_user(username, password)
+            
+            if is_authenticated:
+                # Update session state
+                st.session_state.authenticated = True
+                st.session_state.user_role = user_role
+                st.session_state.username = username
+                
+                # Force page refresh to show main interface
+                st.experimental_rerun()
+            else:
+                st.error("Invalid username or password")
+
+
+def main():
+    """Main application function."""
+    # Initialize session state variables
+    if "authenticated" not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if "user_role" not in st.session_state:
+        st.session_state.user_role = "Employee"
+    
+    if "selected_department" not in st.session_state:
+        st.session_state.selected_department = "HR"
+    
+    if "vector_store" not in st.session_state:
+        st.session_state.vector_store = VectorStore()
+    
+    # Set page configuration
+    st.set_page_config(
+        page_title="Enterprise Knowledge Hub",
+        page_icon="📚",
+        layout="wide"
+    )
+    
+    # Application navigation
+    if not st.session_state.authenticated:
+        # Show login screen
+        login_screen()
+    else:
+        # Create sidebar with navigation
+        create_sidebar()
+        
+        # Main page content
+        tab1, tab2 = st.tabs(["Chat Assistant", "Department Dashboard"])
+        
+        with tab1:
+            chat_interface()
+        
+        with tab2:
+            department_dashboard()
+
 
 if __name__ == "__main__":
     main()
