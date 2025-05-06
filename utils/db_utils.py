@@ -142,31 +142,18 @@ def get_or_create_conversation(user_id, title=None):
                 # Refresh to ensure all attributes are loaded
                 session.refresh(conversation)
             
-            # Create a dictionary with all needed attributes
+            # Create a dictionary with all needed attributes to return
             return {
                 "id": conversation.id,
                 "user_id": conversation.user_id,
                 "title": conversation.title,
-                "created_at": conversation.created_at
             }
     
     # Get conversation data
     conversation_data = execute_with_retry(_get_or_create_conversation)
     
-    # Create a new conversation object with this data
-    # (This object isn't bound to a session but has all the data we need)
-    conversation = Conversation(
-        id=conversation_data["id"],
-        user_id=conversation_data["user_id"],
-        title=conversation_data["title"]
-    )
-    
-    # Set created_at manually since it might have a default value in the constructor
-    conversation.created_at = conversation_data["created_at"]
-    
-    return conversation
-    
-    return execute_with_retry(_get_or_create_conversation)
+    # Return just the data dictionary instead of trying to create a new Conversation object
+    return conversation_data
 
 def add_message_to_db(conversation_id, role, content, image_data=None):
     """Add a message to the database."""
