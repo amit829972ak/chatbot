@@ -21,14 +21,15 @@ if "agent" not in st.session_state:
 if "vector_store" not in st.session_state:
     st.session_state.vector_store = initialize_vector_store()
     
+# In app.py
 if "conversation_id" not in st.session_state:
     # Get or create default user
     user = get_or_create_user()
     # Get or create a conversation
-    conversation_result = get_or_create_conversation(user.id)
-    st.session_state.conversation_id = conversation_result.id
+    conversation = get_or_create_conversation(user.id)
+    st.session_state.conversation_id = conversation["id"]
     # Set the conversation ID for the agent
-    st.session_state.agent.set_conversation_id(conversation.id)
+    st.session_state.agent.set_conversation_id(conversation["id"])
 
 # App title and description
 st.title("Gemini Multimodal RAG Chatbot")
@@ -112,14 +113,16 @@ with st.sidebar:
     
     st.header("Conversation")
     
+    # And in the New Conversation button
     if st.button("New Conversation"):
         # Get or create default user
         user = get_or_create_user()
         # Create a new conversation
         conversation = get_or_create_conversation(user.id, "New Conversation")
-        st.session_state.conversation_id = conversation.id
-        st.session_state.agent.set_conversation_id(conversation.id)
+        st.session_state.conversation_id = conversation["id"]
+        st.session_state.agent.set_conversation_id(conversation["id"])
         st.rerun()
+
     
     st.markdown("---")
     
