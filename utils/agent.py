@@ -1,3 +1,4 @@
+# utils/agent.py
 from utils.gemini_utils import get_ai_response
 from utils.gemini_langchain_utils import get_rag_response, get_multimodal_response
 from utils.db_utils import add_message_to_db, get_conversation_messages
@@ -64,7 +65,7 @@ class Agent:
             image_analysis (str, optional): Analysis of an uploaded image.
             document_content (str, optional): Content of an uploaded document.
             relevant_info (list, optional): Relevant information from the vector store.
-            api_key (str, optional): OpenAI API key.
+            api_key (str, optional): Google Gemini API key.
             
         Returns:
             str: The agent's response.
