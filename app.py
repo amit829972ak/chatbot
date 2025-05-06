@@ -25,8 +25,8 @@ if "conversation_id" not in st.session_state:
     # Get or create default user
     user = get_or_create_user()
     # Get or create a conversation
-    conversation = get_or_create_conversation(user.id)
-    st.session_state.conversation_id = conversation.id
+    conversation_result = get_or_create_conversation(user.id)
+    st.session_state.conversation_id = conversation_result.id
     # Set the conversation ID for the agent
     st.session_state.agent.set_conversation_id(conversation.id)
 
