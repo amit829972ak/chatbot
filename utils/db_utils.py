@@ -139,8 +139,30 @@ def get_or_create_conversation(user_id, title=None):
                 )
                 session.add(conversation)
                 session.commit()
-                
-            return conversation
+            
+            # Ensure all attributes are loaded by accessing them
+            # This forces SQLAlchemy to load them while the session is still open
+            conversation_id = conversation.id
+            user_id = conversation.user_id
+            conv_title = conversation.title
+            
+            # Return a dictionary with all the attributes we need
+            return {
+                "id": conversation_id,
+                "user_id": user_id,
+                "title": conv_title
+            }
+    
+    result = execute_with_retry(_get_or_create_conversation)
+    
+    # Create a new Conversation object with the values from the dictionary
+    conversation = Conversation(
+        id=result["id"],
+        user_id=result["user_id"],
+        title=result["title"]
+    )
+    
+    return conversation
     
     return execute_with_retry(_get_or_create_conversation)
 
