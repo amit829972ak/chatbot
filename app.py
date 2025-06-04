@@ -1,317 +1,431 @@
 import streamlit as st
-from PIL import Image
-import io
+import base64
+from utils.auth import login_form
+from utils.docs import handle_upload, handle_delete, list_documents
+from utils.chat import handle_chat
 import os
-import pandas as pd
 
-from utils.gemini_utils import analyze_image_content, get_embedding, get_gemini_client
-from utils.document_utils import process_document, get_file_extension, get_document_summary
-from utils.image_utils import process_image, convert_image_to_bytes, bytes_to_image
-from utils.agent import Agent
-from utils.vector_store import initialize_vector_store, search_vector_store
-from utils.db_utils import initialize_database, get_or_create_user, get_or_create_conversation
-
-# Initialize the database
-initialize_database()
+# Page configuration
+st.set_page_config(
+    page_title="RAG Chatbot",
+    page_icon="💬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # Initialize session state
-if "agent" not in st.session_state:
-    st.session_state.agent = Agent()
-    
-if "vector_store" not in st.session_state:
-    st.session_state.vector_store = initialize_vector_store()
-    
-# In app.py
-if "conversation_id" not in st.session_state:
-    # Get or create default user
-    user = get_or_create_user()
-    # Get or create a conversation
-    conversation = get_or_create_conversation(user.id)
-    st.session_state.conversation_id = conversation["id"]
-    # Set the conversation ID for the agent
-    st.session_state.agent.set_conversation_id(conversation["id"])
+if 'authenticated' not in st.session_state:
+    st.session_state['authenticated'] = False
+if 'chat_history' not in st.session_state:
+    st.session_state['chat_history'] = []
+if 'api_key' not in st.session_state:
+    st.session_state['api_key'] = ""
+if 'model_choice' not in st.session_state:
+    st.session_state['model_choice'] = "OpenAI GPT"
 
-# App title and description
-st.title("Gemini Multimodal RAG Chatbot")
-st.markdown("Chat with a Google Gemini AI assistant that can see images, understand documents, and access relevant knowledge.")
-
-# Welcome message and instructions
-if "visited" not in st.session_state:
-    st.session_state.visited = True
+# Custom CSS
+def load_css():
+    st.markdown("""
+    <style>
+    /* Primary colors */
+    :root {
+        --primary: #2D3748;
+        --secondary: #4A5568;
+        --accent: #0EA5E9;
+        --background: #F7FAFC;
+        --text: #1A202C;
+    }
     
-    welcome_container = st.container()
-    with welcome_container:
-        st.info("👋 Welcome to the Multimodal RAG Chatbot!")
+    /* Font styling */
+    body {
+        font-family: 'Inter', 'SF Pro Display', sans-serif;
+        color: var(--text);
+        background-color: var(--background);
+    }
+    
+    /* Sidebar styling */
+    .sidebar .sidebar-content {
+        background-color: var(--primary);
+        color: white;
+    }
+    
+    /* Chat message styling */
+    .user-message {
+        background-color: var(--accent);
+        color: white;
+        border-radius: 15px 15px 0 15px;
+        padding: 10px 16px;
+        margin: 16px 0;
+        max-width: 80%;
+        align-self: flex-end;
+    }
+    
+    .bot-message {
+        background-color: #f0f0f0;
+        color: var(--text);
+        border-radius: 15px 15px 15px 0;
+        padding: 10px 16px;
+        margin: 16px 0;
+        max-width: 80%;
+        align-self: flex-start;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+    
+    /* Document list styling */
+    .doc-item {
+        background-color: white;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 8px 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
+    }
+    
+    .doc-item:hover {
+        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+    
+    /* Button styling */
+    .stButton>button {
+        background-color: var(--accent);
+        color: white;
+        border-radius: 6px;
+        border: none;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+    }
+    
+    .stButton>button:hover {
+        background-color: #0b8bcf;
+    }
+    
+    /* Header styling */
+    h1, h2, h3 {
+        color: var(--primary);
+        font-weight: 600;
+    }
+    
+    /* Input styling */
+    input, textarea, select {
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Load custom CSS
+load_css()
+
+# Create uploaded_docs directory if it doesn't exist
+os.makedirs("uploaded_docs", exist_ok=True)
+
+# Create static directory if it doesn't exist
+os.makedirs("static", exist_ok=True)
+
+# Sidebar configuration
+sidebar_logo_path = "static/logo.svg"
+if os.path.exists(sidebar_logo_path):
+    st.sidebar.image(sidebar_logo_path, width=250)
+else:
+    st.sidebar.title("RAG Chatbot")
+    
+st.sidebar.title("Admin Panel")
+
+# Authentication
+if not st.session_state['authenticated']:
+    login_form()
+else:
+    st.sidebar.success("Logged in ✅")
+    if st.sidebar.button("Logout"):
+        st.session_state['authenticated'] = False
+        st.rerun()
+    
+    # Document Management Section
+    st.sidebar.header("Document Management")
+    
+    # Upload section
+    handle_upload()
+    
+    # Delete section
+    handle_delete()
+
+# AI Model Settings
+st.sidebar.header("AI Model Settings")
+
+# Define model options with versions
+openai_models = [
+    "OpenAI GPT-4o",
+    "OpenAI GPT-4",
+    "OpenAI GPT-3.5 Turbo"
+]
+gemini_models = [
+    "Google Gemini Pro",
+    "Google Gemini Flash",
+    "Google Gemini 1.0 Pro Vision",
+    "Google Gemini 1.5 Pro",
+    "Google Gemini 1.5 Flash",
+    "Google Gemini 1.5 Pro Latest",
+    "Google Gemini 1.5 Flash Latest",
+    "Google Gemini 2.0 Pro Vision",
+    "Google Gemini 2.0 Pro",
+    "Google Gemini 2.5 Pro",
+    "Google Gemini 2.5 Flash"
+]
+claude_models = [
+    "Claude 3.5 Sonnet",
+    "Claude 3 Opus",
+    "Claude 3 Sonnet",
+    "Claude 3 Haiku"
+]
+
+# Create expanded model options
+model_categories = {
+    "OpenAI Models": openai_models,
+    "Google Models": gemini_models,
+    "Anthropic Models": claude_models
+}
+
+# Select model category first
+model_category = st.sidebar.selectbox(
+    "Select Model Provider",
+    list(model_categories.keys())
+)
+
+# Then select specific model from that category
+model_choice = st.sidebar.selectbox(
+    "Select Specific Model",
+    model_categories[model_category]
+)
+
+# Map from display name to internal name for code use
+if "OpenAI" in model_choice:
+    internal_model_choice = "OpenAI GPT"
+elif "Google" in model_choice:
+    internal_model_choice = "Google Gemini"
+elif "Claude" in model_choice:
+    internal_model_choice = "Claude"
+else:
+    internal_model_choice = "OpenAI GPT"  # Default
+
+# Update session state with internal model choice and full model name
+st.session_state["model_choice"] = internal_model_choice
+st.session_state["specific_model"] = model_choice
+
+# API key input
+api_key = st.sidebar.text_input("Enter API Key", type="password", value=st.session_state.get("api_key", ""))
+st.session_state["api_key"] = api_key
+
+# Model information
+model_info = {
+    "OpenAI GPT-4o": "OpenAI's most advanced multimodal model with vision capabilities (Mar 2024)",
+    "OpenAI GPT-4": "OpenAI's powerful language model (Mar 2023)",
+    "OpenAI GPT-3.5 Turbo": "OpenAI's efficient and cost-effective model (Jan 2023)",
+    
+    "Google Gemini Pro": "Google's advanced reasoning model (Dec 2023)",
+    "Google Gemini Flash": "Google's fastest model for efficiency (Dec 2023)",
+    "Google Gemini 1.0 Pro Vision": "Google's first multimodal model with vision capabilities (Dec 2023)",
+    "Google Gemini 1.5 Pro": "Google's enhanced reasoning model (Mar 2024)",
+    "Google Gemini 1.5 Flash": "Google's enhanced fast model (Mar 2024)",
+    "Google Gemini 1.5 Pro Latest": "Latest version of Google's Gemini 1.5 Pro model (May 2024)",
+    "Google Gemini 1.5 Flash Latest": "Latest version of Google's Gemini 1.5 Flash model (May 2024)",
+    "Google Gemini 2.0 Pro Vision": "Google's advanced multimodal model with vision capabilities (Feb 2025)",
+    "Google Gemini 2.0 Pro": "Google's powerful second-generation model (Feb 2025)",
+    "Google Gemini 2.5 Pro": "Google's cutting-edge Pro model (Apr 2025)",
+    "Google Gemini 2.5 Flash": "Google's cutting-edge fast model (Apr 2025)",
+    
+    "Claude 3.5 Sonnet": "Anthropic's latest model with advanced capabilities (Oct 2024)",
+    "Claude 3 Opus": "Anthropic's most powerful model (Mar 2024)",
+    "Claude 3 Sonnet": "Anthropic's balanced model (Mar 2024)",
+    "Claude 3 Haiku": "Anthropic's fastest model (Mar 2024)"
+}
+
+# Show model information
+if model_choice in model_info:
+    st.sidebar.info(f"Using {model_choice}: {model_info[model_choice]}")
+
+# Main chat interface
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.title("Company RAG Chatbot")
+    st.markdown("""
+    Ask questions about company documents and policies. 
+    The system will search through your documents to find relevant information.
+    """)
+    
+    # Display chat history
+    for message in st.session_state['chat_history']:
+        if message['role'] == 'user':
+            st.markdown(f"<div class='user-message'>{message['content']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='bot-message'>{message['content']}</div>", unsafe_allow_html=True)
+    
+    # Input for new question with options
+    col_input, col_upload, col_web_search = st.columns([4, 0.5, 0.5])
+    
+    with col_input:
+        query = st.text_input("Ask your question:", key="query_input")
+    
+    with col_upload:
+        st.markdown("<br>", unsafe_allow_html=True)  # Add some space to align with text input
         
-        with st.expander("How to use this chatbot", expanded=True):
-            st.markdown("""
-            This chatbot can interact with you through text, images, and documents. Here's how to use it:
-            
-            1. **Text Queries**: Simply type your question in the chat input at the bottom of the page.
-            
-            2. **Image Analysis**: Upload an image from the sidebar, then ask a question about it.
-               - Supported formats: jpg, jpeg, png
-               
-            3. **Document Analysis**: Upload a document from the sidebar, then ask questions about its content.
-               - Supported formats: CSV, TSV, XLSX, PDF, TXT, DOCX
-               
-            4. **API Key**: For full functionality, enter your Google Gemini API key in the sidebar.
-            
-            5. **Start Over**: Use the "New Conversation" button in the sidebar to start fresh.
-            
-            Try asking questions about uploaded images or documents, or any general knowledge queries!
-            """)
-            
-        st.markdown("---")
-
-# Sidebar with options
-with st.sidebar:
-    st.header("Settings")
-    
-    # API Key section - more prominent now
-    st.subheader("🔑 Google Gemini API Key (Required)")
-    
-    # Initialize API key in session state if not already there
-    if "google_api_key" not in st.session_state:
-        st.session_state.google_api_key = os.environ.get("GOOGLE_API_KEY", "")
-    
-    # Get API key with key value from session state as default
-    api_key = st.text_input("Enter your Google Gemini API key", 
-                           value=st.session_state.google_api_key,
-                           type="password", 
-                           help="Your API key will be used for this session only and won't be stored permanently.",
-                           key="api_key_input")
-    
-    # Always update the session state with whatever is in the input
-    st.session_state.google_api_key = api_key
-    
-    # Validate the API key
-    if api_key:
-        # Call get_gemini_client once to validate the key
-        try:
-            get_gemini_client(api_key)
-            st.success("✅ API key verified and set for this session!")
-        except Exception as e:
-            st.error(f"⚠️ Invalid API key: {str(e)}")
-            st.session_state.google_api_key = None
-    else:
-        st.warning("⚠️ Please enter your Google Gemini API key to use the chatbot.")
-        st.error("Without an API key, you can upload files but cannot process queries.")
-        st.session_state.google_api_key = None
-            
-    # API key information
-    with st.expander("How to get a Google Gemini API key"):
+        # Add custom CSS for the upload button
         st.markdown("""
-        1. Go to [makersuite.google.com](https://makersuite.google.com)
-        2. Sign up or log in to your Google account
-        3. Navigate to the API Keys section
-        4. Create a new API key
-        5. Copy and paste it into the field above
+        <style>
+        div[data-testid="stFileUploader"] label {
+            display: none !important;
+        }
+        div[data-testid="stFileUploader"] > div {
+            border: none !important;
+            background: none !important;
+            padding: 0 !important;
+        }
+        div[data-testid="stFileUploader"] section {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 6px !important;
+            padding: 0 !important;
+            width: 40px !important;
+            height: 40px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background-color: white !important;
+            cursor: pointer !important;
+            position: relative !important;
+        }
+        div[data-testid="stFileUploader"] section:hover {
+            border-color: #0EA5E9 !important;
+            background-color: #f8fafc !important;
+        }
+        div[data-testid="stFileUploader"] section * {
+            display: none !important;
+        }
+        div[data-testid="stFileUploader"] section::before {
+            content: "+";
+            font-size: 20px;
+            color: #4A5568;
+            font-weight: bold;
+            display: block !important;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        div[data-testid="stFileUploader"] section button {
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            opacity: 0 !important;
+            cursor: pointer !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
-        **Note:** Google Gemini API may have usage limits based on your plan. Check Google's documentation for more details.
-        """)
+        uploaded_file = st.file_uploader(
+            "Upload document", 
+            type=["pdf", "txt", "docx"],
+            help="Upload a document to ask questions about",
+            label_visibility="collapsed",
+            key="doc_uploader_inline"
+        )
     
-    st.header("Conversation")
+    with col_web_search:
+        st.markdown("<br>", unsafe_allow_html=True)  # Add some space to align with text input
+        web_search_clicked = st.button("🌐", help="Search the web for this question", key="web_search_btn")
     
-    # And in the New Conversation button
-    if st.button("New Conversation"):
-        # Get or create default user
-        user = get_or_create_user()
-        # Create a new conversation
-        conversation = get_or_create_conversation(user.id, "New Conversation")
-        st.session_state.conversation_id = conversation["id"]
-        st.session_state.agent.set_conversation_id(conversation["id"])
+    # Handle web search
+    if web_search_clicked and query:
+        from utils.web_search import handle_web_search
+        
+        # Add user message to chat history
+        st.session_state['chat_history'].append({'role': 'user', 'content': f"🌐 Web Search: {query}"})
+        
+        # Perform web search
+        with st.spinner("Searching the web..."):
+            search_results = handle_web_search(query)
+        
+        # Add search results to chat history
+        st.session_state['chat_history'].append({'role': 'assistant', 'content': search_results})
+        
+        # Refresh the page to show the updated chat
+        st.rerun()
+    
+    if st.button("Send") and query:
+        # Add user message to chat history
+        st.session_state['chat_history'].append({'role': 'user', 'content': query})
+        
+        # Get response from RAG system
+        with st.spinner("Getting answer..."):
+            response = handle_chat(query, internal_model_choice, api_key, uploaded_file)
+        
+        # Add bot response to chat history
+        st.session_state['chat_history'].append({'role': 'assistant', 'content': response})
+        
+        # Refresh the page to show the updated chat
         st.rerun()
 
+# Document list and information panel
+with col2:
+    doc_image_path = "static/documents.svg"
+    if os.path.exists(doc_image_path):
+        st.image(doc_image_path, width=250)
+    st.header("Knowledge Base")
     
-    st.markdown("---")
-    
-    # File upload section with tabs for different types
-    upload_tab1, upload_tab2 = st.tabs(["Upload Image", "Upload Document"])
-    
-    with upload_tab1:
-        st.markdown("### Upload an Image")
-        image_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"], key="image_uploader")
+    # Always show document list for all users
+    documents = list_documents()
+    if documents:
+        st.subheader("Available Documents")
         
-        if image_file is not None:
-            try:
-                # Display the uploaded image in the sidebar
-                image = Image.open(image_file)
-                st.image(image, caption="Uploaded Image", use_container_width=True)
-                
-                # Process and store the image in session state
-                processed_image = process_image(image)
-                st.session_state.image = processed_image
-                st.session_state.image_bytes = convert_image_to_bytes(processed_image)
-                
-                # Clear any document data
-                st.session_state.document_content = None
-                st.session_state.document_df = None
-            except Exception as e:
-                st.error(f"Error processing image: {str(e)}")
-                st.warning("Please try uploading a different image file.")
-                st.session_state.image = None
-                st.session_state.image_bytes = None
-    
-    with upload_tab2:
-        st.markdown("### Upload a Document")
-        document_file = st.file_uploader(
-            "Choose a document...", 
-            type=["csv", "tsv", "xlsx", "pdf", "txt", "docx", "doc"], 
-            key="document_uploader"
-        )
+        # Initialize selected documents in session state if not present
+        if 'selected_documents' not in st.session_state:
+            st.session_state['selected_documents'] = []
         
-        if document_file is not None:
-            try:
-                file_extension = get_file_extension(document_file.name)
-                supported_extensions = ['.csv', '.tsv', '.xlsx', '.pdf', '.txt', '.docx', '.doc']
-                
-                if file_extension not in supported_extensions:
-                    st.error(f"Unsupported file type: {file_extension}")
-                    st.info(f"Supported file types: {', '.join(supported_extensions)}")
-                    st.session_state.document_content = None
-                    st.session_state.document_df = None
+        # Create a container for document selection
+        doc_container = st.container()
+        
+        # Add select all option
+        select_all = st.checkbox("Select All Documents", 
+                                key="select_all_docs",
+                                value=len(st.session_state['selected_documents']) == len(documents))
+        
+        if select_all:
+            st.session_state['selected_documents'] = documents
+        elif select_all == False and len(st.session_state['selected_documents']) == len(documents):
+            st.session_state['selected_documents'] = []
+        
+        # Display document list with checkboxes
+        with doc_container:
+            for doc in documents:
+                is_selected = doc in st.session_state['selected_documents']
+                if st.checkbox(doc, value=is_selected, key=f"doc_{doc}"):
+                    if doc not in st.session_state['selected_documents']:
+                        st.session_state['selected_documents'].append(doc)
                 else:
-                    with st.spinner(f"Processing {file_extension} file..."):
-                        # Process the document and get content and dataframe (if applicable)
-                        document_content, document_df = process_document(document_file, file_extension)
-                        
-                        if not document_content:
-                            st.warning(f"No content could be extracted from {document_file.name}")
-                            st.session_state.document_content = None
-                            st.session_state.document_df = None
-                        else:
-                            # Store in session state
-                            st.session_state.document_content = document_content
-                            st.session_state.document_df = document_df
-                            
-                            # Display a preview
-                            preview_text = document_content[:2000]
-                            if len(document_content) > 2000:
-                                preview_text += f"...\n\n[Preview showing first 2,000 characters. Full content ({len(document_content):,} characters) will be analyzed.]"
-                            st.text_area("Document Preview", preview_text, height=200)
-                            
-                            # Display info about document size
-                            content_size = len(document_content)
-                            words = document_content.split()
-                            word_count = len(words)
-                            st.info(f"Document extracted successfully: {word_count:,} words ({content_size/1000:.1f}KB). Full document content will be analyzed.")
-                            
-                            # Clear any image data
-                            st.session_state.image = None
-                            st.session_state.image_bytes = None
-                            
-                            st.success(f"✅ {document_file.name} processed successfully!")
-            except Exception as e:
-                st.error(f"Error processing document: {str(e)}")
-                st.warning("Please try uploading a different document file.")
-                st.session_state.document_content = None
-                st.session_state.document_df = None
-    
-    # Initialize document-related session state if not exists
-    if "document_content" not in st.session_state:
-        st.session_state.document_content = None
+                    if doc in st.session_state['selected_documents']:
+                        st.session_state['selected_documents'].remove(doc)
         
-    if "document_df" not in st.session_state:
-        st.session_state.document_df = None
-        
-    # Initialize image-related session state if not exists
-    if "image" not in st.session_state:
-        st.session_state.image = None
-        
-    if "image_bytes" not in st.session_state:
-        st.session_state.image_bytes = None
-
-# Define function to add message to chat
-def add_message(role, content, image_data=None):
-    """Add a message to the chat history."""
-    # Create message container
-    with st.chat_message(role):
-        # If image data exists and role is user, display the image
-        if image_data is not None and role == "user":
-            # Convert bytes to image and display
-            display_image = bytes_to_image(image_data)
-            if display_image:
-                st.image(display_image, caption="User uploaded image", width=300)
-        
-        # Display message content
-        st.markdown(content)
-
-# Display chat messages from history
-try:
-    conversation_context = st.session_state.agent.get_conversation_context()
-    if conversation_context:
-        for message in conversation_context:
-            add_message(message["role"], message["content"])
-    else:
-        st.info("Start a new conversation by typing a message below.")
-except Exception as e:
-    st.error(f"Error loading conversation history: {str(e)}")
-    st.warning("You can start a new conversation by typing a message below.")
-
-# Chat input
-if prompt := st.chat_input("Type your message here..."):
-    # Handle user input
-    user_message = prompt
-    
-    # Add document information to the message if present
-    document_content = None
-    if st.session_state.document_content is not None:
-        document_summary = get_document_summary(st.session_state.document_content)
-        user_message += f"\n\n[Document attached: {document_summary}]"
-        document_content = st.session_state.document_content
-    
-    # Display the user message with image if present
-    add_message("user", user_message, st.session_state.image_bytes)
-    
-    # Analyze image if present
-    image_analysis = None
-    if st.session_state.image is not None:
-        with st.spinner("Analyzing image..."):
-            # Pass the API key from session state
-            image_analysis = analyze_image_content(
-                st.session_state.image, 
-                api_key=st.session_state.get('google_api_key')
-            )
-        # Clear the image after processing
-        st.session_state.image = None
-    
-    # Get relevant information if no image or document query
-    relevant_info = None
-    if not image_analysis and not document_content:
-        with st.spinner("Searching knowledge base..."):
-            # Pass the API key from session state
-            query_embedding = get_embedding(
-                prompt, 
-                api_key=st.session_state.get('google_api_key')
-            )
-            relevant_info = search_vector_store(st.session_state.vector_store, query_embedding)
-    
-    # Get AI response
-    try:
-        with st.spinner("Thinking..."):
-            response = st.session_state.agent.process_query(
-                query=prompt,
-                image_analysis=image_analysis,
-                document_content=document_content,
-                relevant_info=relevant_info,
-                api_key=st.session_state.get('google_api_key')
-            )
-            
-            # Clear document content after processing
-            st.session_state.document_content = None
-            st.session_state.document_df = None
-    except Exception as e:
-        error_msg = str(e)
-        if "429" in error_msg or "rate limit" in error_msg.lower() or "quota" in error_msg.lower():
-            response = "⚠️ Google API quota or rate limit reached. Please try again later or provide a different API key in the sidebar."
-            st.error("Google API quota or rate limit reached. Please check your API key or try again later.")
-        elif "API key" in error_msg:
-            response = "⚠️ Invalid Google API key. Please provide a valid Gemini API key in the sidebar."
-            st.error("Google API key error. Please check your API key and try again.")
+        # Show which documents are selected
+        if st.session_state['selected_documents']:
+            st.success(f"Selected {len(st.session_state['selected_documents'])} documents for search")
         else:
-            response = f"⚠️ An error occurred: {error_msg}. Please try again or check your inputs."
-            st.error(f"Error: {error_msg}")
+            st.info("No documents selected. All documents will be searched.")
+    else:
+        if st.session_state['authenticated']:
+            st.info("No documents uploaded yet. Use the sidebar to upload documents.")
+        else:
+            st.info("No documents available. Please contact an administrator to upload documents.")
     
-    # Display assistant response
-    add_message("assistant", response)
+    # Show information about the system
+    st.subheader("About the System")
+    st.markdown("""
+    This RAG (Retrieval-Augmented Generation) chatbot:
+    
+    1. Searches through uploaded documents
+    2. Finds relevant information using text search
+    3. Uses AI to generate comprehensive answers
+    4. Falls back to FAQ for common questions
+    5. **🌐 Web Search** - Click the globe icon to search the internet
+    """)
