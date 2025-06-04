@@ -1,6 +1,5 @@
-import streamlit as st
-from duckduckgo_search import DDGS
 from typing import List, Dict, Any
+from duckduckgo_search import DDGS
 
 def search_web(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
     """
@@ -18,14 +17,13 @@ def search_web(query: str, max_results: int = 5) -> List[Dict[str, Any]]:
             results = []
             for result in ddgs.text(query, max_results=max_results):
                 results.append({
-                    'title': result.get('title', ''),
-                    'body': result.get('body', ''),
-                    'href': result.get('href', ''),
-                    'snippet': result.get('body', '')[:300] + '...' if len(result.get('body', '')) > 300 else result.get('body', '')
+                    'title': result.get('title', 'No title'),
+                    'body': result.get('body', 'No description'),
+                    'href': result.get('href', '#')
                 })
             return results
     except Exception as e:
-        st.error(f"Error during web search: {str(e)}")
+        print(f"Error performing web search: {e}")
         return []
 
 def format_search_results(results: List[Dict[str, Any]]) -> str:
@@ -41,14 +39,18 @@ def format_search_results(results: List[Dict[str, Any]]) -> str:
     if not results:
         return "No search results found."
     
-    formatted_results = "**Web Search Results:**\n\n"
+    formatted = "**Web Search Results:**\n\n"
     
     for i, result in enumerate(results, 1):
-        formatted_results += f"**{i}. {result['title']}**\n"
-        formatted_results += f"{result['snippet']}\n"
-        formatted_results += f"🔗 [Read more]({result['href']})\n\n"
+        title = result.get('title', 'No title')
+        body = result.get('body', 'No description')
+        url = result.get('href', '#')
+        
+        formatted += f"**{i}. {title}**\n"
+        formatted += f"{body}\n"
+        formatted += f"Source: {url}\n\n"
     
-    return formatted_results
+    return formatted
 
 def handle_web_search(query: str) -> str:
     """
@@ -60,14 +62,12 @@ def handle_web_search(query: str) -> str:
     Returns:
         Formatted search results string
     """
-    if not query.strip():
-        return "Please provide a search query."
-    
-    # Perform web search
-    results = search_web(query, max_results=5)
-    
-    if not results:
-        return "No search results found for your query. Please try different keywords."
-    
-    # Format and return results
-    return format_search_results(results)
+    try:
+        # Perform web search
+        results = search_web(query, max_results=5)
+        
+        # Format and return results
+        return format_search_results(results)
+        
+    except Exception as e:
+        return f"Error performing web search: {str(e)}"
