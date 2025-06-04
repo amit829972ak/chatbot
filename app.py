@@ -1,7 +1,7 @@
 import streamlit as st
 import base64
 from utils.auth import login_form
-from utils.docs import handle_upload, handle_delete, list_documents
+from utils.docs import handle_upload, handle_delete, list_documents, display_document_info
 from utils.chat import handle_chat
 import os
 
@@ -149,6 +149,9 @@ else:
     
     # Delete section
     handle_delete()
+    
+    # Display document versioning information
+    display_document_info()
 
 # AI Model Settings
 st.sidebar.header("AI Model Settings")
@@ -269,65 +272,10 @@ with col1:
     
     with col_upload:
         st.markdown("<br>", unsafe_allow_html=True)  # Add some space to align with text input
-        
-        # Add custom CSS for the upload button
-        st.markdown("""
-        <style>
-        div[data-testid="stFileUploader"] label {
-            display: none !important;
-        }
-        div[data-testid="stFileUploader"] > div {
-            border: none !important;
-            background: none !important;
-            padding: 0 !important;
-        }
-        div[data-testid="stFileUploader"] section {
-            border: 1px solid #e2e8f0 !important;
-            border-radius: 6px !important;
-            padding: 0 !important;
-            width: 40px !important;
-            height: 40px !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background-color: white !important;
-            cursor: pointer !important;
-            position: relative !important;
-        }
-        div[data-testid="stFileUploader"] section:hover {
-            border-color: #0EA5E9 !important;
-            background-color: #f8fafc !important;
-        }
-        div[data-testid="stFileUploader"] section * {
-            display: none !important;
-        }
-        div[data-testid="stFileUploader"] section::before {
-            content: "+";
-            font-size: 20px;
-            color: #4A5568;
-            font-weight: bold;
-            display: block !important;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-        }
-        div[data-testid="stFileUploader"] section button {
-            position: absolute !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            opacity: 0 !important;
-            cursor: pointer !important;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-        
         uploaded_file = st.file_uploader(
-            "Upload document", 
-            type=["pdf", "txt", "docx"],
-            help="Upload a document to ask questions about",
+            "📎", 
+            type=["pdf", "txt", "docx", "xlsx", "xls", "pptx", "ppt"],
+            help="Upload a document to ask questions about (PDF, TXT, DOCX, XLSX, PPTX)",
             label_visibility="collapsed",
             key="doc_uploader_inline"
         )
@@ -421,11 +369,29 @@ with col2:
     # Show information about the system
     st.subheader("About the System")
     st.markdown("""
-    This RAG (Retrieval-Augmented Generation) chatbot:
+    This advanced RAG (Retrieval-Augmented Generation) chatbot features:
     
-    1. Searches through uploaded documents
-    2. Finds relevant information using text search
-    3. Uses AI to generate comprehensive answers
-    4. Falls back to FAQ for common questions
-    5. **🌐 Web Search** - Click the globe icon to search the internet
+    **Document Support:**
+    - PDF, Word (DOCX), Text files
+    - Excel spreadsheets (XLSX, XLS)
+    - PowerPoint presentations (PPTX, PPT)
+    
+    **Advanced Features:**
+    - Semantic search with sentence transformers
+    - Document versioning and change tracking
+    - Multiple AI model support (OpenAI, Google, Anthropic)
+    - Web search integration
+    - FAQ fallback system
+    
+    **How it works:**
+    1. Upload documents using the clean '+' button
+    2. Advanced embeddings create semantic understanding
+    3. Smart search finds relevant content across all formats
+    4. AI generates comprehensive answers
+    5. Version tracking maintains document history
+    
+    **Search Options:**
+    - 🌐 Web Search - Click the globe icon
+    - 📎 Instant document analysis - Upload and ask
+    - 📚 Knowledge base search - Select specific documents
     """)
