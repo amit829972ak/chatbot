@@ -1,2 +1,14 @@
 [server]
 headless = true
+address = "0.0.0.0"
+port = 5000
+
+[theme]
+primaryColor = "#0EA5E9"
+backgroundColor = "#F7FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1A202C"
+font = "sans-serif"
+
+[global]
+developmentMode = false
