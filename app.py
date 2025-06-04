@@ -23,329 +23,93 @@ if 'api_key' not in st.session_state:
 if 'model_choice' not in st.session_state:
     st.session_state['model_choice'] = "OpenAI GPT"
 
-# Custom CSS - Corrected and improved
+# Custom CSS
 def load_css():
     st.markdown("""
     <style>
-    /* Import modern fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    /* CSS Variables for consistent theming */
+    /* Primary colors */
     :root {
-        --primary-color: #2D3748;
-        --secondary-color: #4A5568;
-        --accent-color: #0EA5E9;
-        --success-color: #10B981;
-        --warning-color: #F59E0B;
-        --error-color: #EF4444;
-        --background-color: #F8FAFC;
-        --surface-color: #FFFFFF;
-        --text-primary: #1A202C;
-        --text-secondary: #64748B;
-        --border-color: #E2E8F0;
-        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        --radius-sm: 0.375rem;
-        --radius-md: 0.5rem;
-        --radius-lg: 0.75rem;
-        --radius-xl: 1rem;
+        --primary: #2D3748;
+        --secondary: #4A5568;
+        --accent: #0EA5E9;
+        --background: #F7FAFC;
+        --text: #1A202C;
     }
     
-    /* Global styles */
-    .stApp {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background-color: var(--background-color);
-        color: var(--text-primary);
-    }
-    
-    /* Main content area */
-    .main .block-container {
-        padding-top: 2rem;
-        padding-bottom: 2rem;
-        max-width: 100%;
+    /* Font styling */
+    body {
+        font-family: 'Inter', 'SF Pro Display', sans-serif;
+        color: var(--text);
+        background-color: var(--background);
     }
     
     /* Sidebar styling */
-    .css-1d391kg {
-        background-color: var(--primary-color);
-    }
-    
     .sidebar .sidebar-content {
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-        color: white;
-        padding: 1rem;
-    }
-    
-    /* Sidebar headers */
-    .sidebar h1, .sidebar h2, .sidebar h3 {
-        color: white !important;
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-    
-    /* Sidebar text */
-    .sidebar .stMarkdown, .sidebar .stText {
+        background-color: var(--primary);
         color: white;
     }
     
-    /* Chat message container */
-    .chat-container {
-        max-height: 60vh;
-        overflow-y: auto;
-        padding: 1rem;
-        background-color: var(--surface-color);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow-md);
-        margin-bottom: 1rem;
-    }
-    
-    /* User message styling */
+    /* Chat message styling */
     .user-message {
-        background: linear-gradient(135deg, var(--accent-color) 0%, #0284C7 100%);
+        background-color: var(--accent);
         color: white;
-        border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
-        padding: 0.875rem 1.25rem;
-        margin: 1rem 0 1rem auto;
-        max-width: 75%;
-        width: fit-content;
-        margin-left: auto;
-        box-shadow: var(--shadow-md);
-        font-weight: 500;
-        line-height: 1.5;
-        word-wrap: break-word;
-        display: block;
-        clear: both;
+        border-radius: 15px 15px 0 15px;
+        padding: 10px 16px;
+        margin: 16px 0;
+        max-width: 80%;
+        align-self: flex-end;
     }
     
-    /* Bot message styling */
     .bot-message {
-        background-color: var(--surface-color);
-        color: var(--text-primary);
-        border: 1px solid var(--border-color);
-        border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
-        padding: 0.875rem 1.25rem;
-        margin: 1rem auto 1rem 0;
-        max-width: 75%;
-        width: fit-content;
-        box-shadow: var(--shadow-sm);
-        line-height: 1.6;
-        word-wrap: break-word;
-        display: block;
-        clear: both;
+        background-color: #f0f0f0;
+        color: var(--text);
+        border-radius: 15px 15px 15px 0;
+        padding: 10px 16px;
+        margin: 16px 0;
+        max-width: 80%;
+        align-self: flex-start;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
     
-    /* Document item styling */
+    /* Document list styling */
     .doc-item {
-        background-color: var(--surface-color);
-        border-radius: var(--radius-md);
-        padding: 1rem;
-        margin: 0.75rem 0;
-        border: 1px solid var(--border-color);
-        box-shadow: var(--shadow-sm);
-        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        cursor: pointer;
+        background-color: white;
+        border-radius: 8px;
+        padding: 12px;
+        margin: 8px 0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        transition: all 0.2s ease;
     }
     
     .doc-item:hover {
-        box-shadow: var(--shadow-lg);
+        box-shadow: 0 3px 8px rgba(0,0,0,0.15);
         transform: translateY(-2px);
-        border-color: var(--accent-color);
     }
     
     /* Button styling */
-    .stButton > button {
-        background: linear-gradient(135deg, var(--accent-color) 0%, #0284C7 100%);
+    .stButton>button {
+        background-color: var(--accent);
         color: white;
-        border-radius: var(--radius-md);
+        border-radius: 6px;
         border: none;
-        padding: 0.625rem 1.25rem;
+        padding: 0.5rem 1rem;
         font-weight: 500;
-        font-size: 0.875rem;
-        transition: all 0.2s ease;
-        box-shadow: var(--shadow-sm);
-        cursor: pointer;
     }
     
-    .stButton > button:hover {
-        background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
-        box-shadow: var(--shadow-md);
-        transform: translateY(-1px);
-    }
-    
-    .stButton > button:active {
-        transform: translateY(0);
-        box-shadow: var(--shadow-sm);
-    }
-    
-    /* Primary button variant */
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
-    }
-    
-    .stButton > button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    .stButton>button:hover {
+        background-color: #0b8bcf;
     }
     
     /* Header styling */
-    h1 {
-        color: var(--primary-color);
-        font-weight: 700;
-        font-size: 2.25rem;
-        margin-bottom: 1rem;
-        background: linear-gradient(135deg, var(--primary-color) 0%, var(--accent-color) 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    
-    h2 {
-        color: var(--primary-color);
+    h1, h2, h3 {
+        color: var(--primary);
         font-weight: 600;
-        font-size: 1.5rem;
-        margin-bottom: 0.75rem;
-        margin-top: 1.5rem;
-    }
-    
-    h3 {
-        color: var(--secondary-color);
-        font-weight: 600;
-        font-size: 1.25rem;
-        margin-bottom: 0.5rem;
-        margin-top: 1rem;
     }
     
     /* Input styling */
-    .stTextInput > div > div > input {
-        border-radius: var(--radius-md);
-        border: 2px solid var(--border-color);
-        padding: 0.75rem 1rem;
-        font-size: 0.875rem;
-        transition: all 0.2s ease;
-        background-color: var(--surface-color);
-    }
-    
-    .stTextInput > div > div > input:focus {
-        border-color: var(--accent-color);
-        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
-        outline: none;
-    }
-    
-    /* Select box styling */
-    .stSelectbox > div > div > select {
-        border-radius: var(--radius-md);
-        border: 2px solid var(--border-color);
-        padding: 0.75rem 1rem;
-        background-color: var(--surface-color);
-        color: var(--text-primary);
-        font-size: 0.875rem;
-    }
-    
-    .stSelectbox > div > div > select:focus {
-        border-color: var(--accent-color);
-        box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
-        outline: none;
-    }
-    
-    /* File uploader styling */
-    .stFileUploader > div {
-        border: 2px dashed var(--border-color);
-        border-radius: var(--radius-md);
-        padding: 1rem;
-        text-align: center;
-        transition: all 0.2s ease;
-        background-color: var(--surface-color);
-    }
-    
-    .stFileUploader > div:hover {
-        border-color: var(--accent-color);
-        background-color: rgba(14, 165, 233, 0.02);
-    }
-    
-    /* Checkbox styling */
-    .stCheckbox > label {
-        font-size: 0.875rem;
-        color: var(--text-primary);
-        font-weight: 500;
-    }
-    
-    /* Success/Info/Warning message styling */
-    .stSuccess {
-        background-color: rgba(16, 185, 129, 0.1);
-        border: 1px solid var(--success-color);
-        border-radius: var(--radius-md);
-        color: var(--success-color);
-        padding: 0.75rem 1rem;
-    }
-    
-    .stInfo {
-        background-color: rgba(14, 165, 233, 0.1);
-        border: 1px solid var(--accent-color);
-        border-radius: var(--radius-md);
-        color: var(--accent-color);
-        padding: 0.75rem 1rem;
-    }
-    
-    .stWarning {
-        background-color: rgba(245, 158, 11, 0.1);
-        border: 1px solid var(--warning-color);
-        border-radius: var(--radius-md);
-        color: var(--warning-color);
-        padding: 0.75rem 1rem;
-    }
-    
-    /* Spinner styling */
-    .stSpinner > div {
-        border-color: var(--accent-color) transparent var(--accent-color) transparent;
-    }
-    
-    /* Knowledge base panel styling */
-    .knowledge-base-panel {
-        background-color: var(--surface-color);
-        border-radius: var(--radius-lg);
-        padding: 1.5rem;
-        box-shadow: var(--shadow-md);
-        border: 1px solid var(--border-color);
-    }
-    
-    /* Responsive design */
-    @media (max-width: 768px) {
-        .user-message, .bot-message {
-            max-width: 90%;
-        }
-        
-        h1 {
-            font-size: 1.75rem;
-        }
-        
-        .main .block-container {
-            padding-left: 1rem;
-            padding-right: 1rem;
-        }
-    }
-    
-    /* Hide Streamlit default elements */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    /* Custom scrollbar */
-    .chat-container::-webkit-scrollbar {
-        width: 6px;
-    }
-    
-    .chat-container::-webkit-scrollbar-track {
-        background: var(--background-color);
-        border-radius: var(--radius-sm);
-    }
-    
-    .chat-container::-webkit-scrollbar-thumb {
-        background: var(--border-color);
-        border-radius: var(--radius-sm);
-    }
-    
-    .chat-container::-webkit-scrollbar-thumb:hover {
-        background: var(--secondary-color);
+    input, textarea, select {
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -364,21 +128,21 @@ sidebar_logo_path = "static/logo.svg"
 if os.path.exists(sidebar_logo_path):
     st.sidebar.image(sidebar_logo_path, width=250)
 else:
-    st.sidebar.title("🤖 RAG Chatbot")
+    st.sidebar.title("RAG Chatbot")
     
-st.sidebar.title("⚙️ Admin Panel")
+st.sidebar.title("Admin Panel")
 
 # Authentication
 if not st.session_state['authenticated']:
     login_form()
 else:
-    st.sidebar.success("✅ Logged in")
-    if st.sidebar.button("🚪 Logout"):
+    st.sidebar.success("Logged in ✅")
+    if st.sidebar.button("Logout"):
         st.session_state['authenticated'] = False
         st.rerun()
     
     # Document Management Section
-    st.sidebar.header("📚 Document Management")
+    st.sidebar.header("Document Management")
     
     # Upload section
     handle_upload()
@@ -390,7 +154,7 @@ else:
     display_document_info()
 
 # AI Model Settings
-st.sidebar.header("🧠 AI Model Settings")
+st.sidebar.header("AI Model Settings")
 
 # Define model options with versions
 openai_models = [
@@ -452,7 +216,7 @@ st.session_state["model_choice"] = internal_model_choice
 st.session_state["specific_model"] = model_choice
 
 # API key input
-api_key = st.sidebar.text_input("🔑 Enter API Key", type="password", value=st.session_state.get("api_key", ""))
+api_key = st.sidebar.text_input("Enter API Key", type="password", value=st.session_state.get("api_key", ""))
 st.session_state["api_key"] = api_key
 
 # Model information
@@ -481,44 +245,30 @@ model_info = {
 
 # Show model information
 if model_choice in model_info:
-    st.sidebar.info(f"ℹ️ **{model_choice}**: {model_info[model_choice]}")
+    st.sidebar.info(f"Using {model_choice}: {model_info[model_choice]}")
 
 # Main chat interface
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.title("💬 Company RAG Chatbot")
+    st.title("Company RAG Chatbot")
     st.markdown("""
-    <div style="background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%); padding: 1rem; border-radius: 0.75rem; margin-bottom: 1.5rem; border: 1px solid #e2e8f0;">
-        <p style="margin: 0; color: #64748b; font-size: 0.95rem; line-height: 1.6;">
-            Ask questions about company documents and policies. 
-            The system will search through your documents to find relevant information.
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
+    Ask questions about company documents and policies. 
+    The system will search through your documents to find relevant information.
+    """)
     
-    # Chat container
-    chat_container = st.container()
-    with chat_container:
-        st.markdown('<div class="chat-container">', unsafe_allow_html=True)
-        
-        # Display chat history
-        for message in st.session_state['chat_history']:
-            if message['role'] == 'user':
-                st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="bot-message">{message["content"]}</div>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Input section
-    st.markdown("---")
+    # Display chat history
+    for message in st.session_state['chat_history']:
+        if message['role'] == 'user':
+            st.markdown(f"<div class='user-message'>{message['content']}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='bot-message'>{message['content']}</div>", unsafe_allow_html=True)
     
     # Input for new question with options
     col_input, col_upload, col_web_search = st.columns([4, 0.5, 0.5])
     
     with col_input:
-        query = st.text_input("💭 Ask your question:", key="query_input", placeholder="Type your question here...")
+        query = st.text_input("Ask your question:", key="query_input")
     
     with col_upload:
         st.markdown("<br>", unsafe_allow_html=True)  # Add some space to align with text input
@@ -542,7 +292,7 @@ with col1:
         st.session_state['chat_history'].append({'role': 'user', 'content': f"🌐 Web Search: {query}"})
         
         # Perform web search
-        with st.spinner("🔍 Searching the web..."):
+        with st.spinner("Searching the web..."):
             search_results = handle_web_search(query)
         
         # Add search results to chat history
@@ -551,13 +301,12 @@ with col1:
         # Refresh the page to show the updated chat
         st.rerun()
     
-    # Send button
-    if st.button("🚀 Send", key="send_button", type="primary") and query:
+    if st.button("Send") and query:
         # Add user message to chat history
         st.session_state['chat_history'].append({'role': 'user', 'content': query})
         
         # Get response from RAG system
-        with st.spinner("🤔 Getting answer..."):
+        with st.spinner("Getting answer..."):
             response = handle_chat(query, internal_model_choice, api_key, uploaded_file)
         
         # Add bot response to chat history
@@ -568,17 +317,15 @@ with col1:
 
 # Document list and information panel
 with col2:
-    st.markdown('<div class="knowledge-base-panel">', unsafe_allow_html=True)
-    
     doc_image_path = "static/documents.svg"
     if os.path.exists(doc_image_path):
-        st.image(doc_image_path, width=200)
-    st.header("📖 Knowledge Base")
+        st.image(doc_image_path, width=250)
+    st.header("Knowledge Base")
     
     # Always show document list for all users
     documents = list_documents()
     if documents:
-        st.subheader("📑 Available Documents")
+        st.subheader("Available Documents")
         
         # Initialize selected documents in session state if not present
         if 'selected_documents' not in st.session_state:
@@ -588,7 +335,7 @@ with col2:
         doc_container = st.container()
         
         # Add select all option
-        select_all = st.checkbox("✅ Select All Documents", 
+        select_all = st.checkbox("Select All Documents", 
                                 key="select_all_docs",
                                 value=len(st.session_state['selected_documents']) == len(documents))
         
@@ -601,7 +348,7 @@ with col2:
         with doc_container:
             for doc in documents:
                 is_selected = doc in st.session_state['selected_documents']
-                if st.checkbox(f"📄 {doc}", value=is_selected, key=f"doc_{doc}"):
+                if st.checkbox(doc, value=is_selected, key=f"doc_{doc}"):
                     if doc not in st.session_state['selected_documents']:
                         st.session_state['selected_documents'].append(doc)
                 else:
@@ -610,45 +357,41 @@ with col2:
         
         # Show which documents are selected
         if st.session_state['selected_documents']:
-            st.success(f"✨ Selected {len(st.session_state['selected_documents'])} documents for search")
+            st.success(f"Selected {len(st.session_state['selected_documents'])} documents for search")
         else:
-            st.info("ℹ️ No documents selected. All documents will be searched.")
+            st.info("No documents selected. All documents will be searched.")
     else:
         if st.session_state['authenticated']:
-            st.info("📝 No documents uploaded yet. Use the sidebar to upload documents.")
+            st.info("No documents uploaded yet. Use the sidebar to upload documents.")
         else:
-            st.info("📝 No documents available. Please contact an administrator to upload documents.")
+            st.info("No documents available. Please contact an administrator to upload documents.")
     
     # Show information about the system
-    st.subheader("ℹ️ About the System")
+    st.subheader("About the System")
     st.markdown("""
-    <div style="font-size: 0.85rem; line-height: 1.6; color: #64748b;">
+    This advanced RAG (Retrieval-Augmented Generation) chatbot features:
     
-    **📋 Document Support:**
+    **Document Support:**
     - PDF, Word (DOCX), Text files
-    - Excel spreadsheets (XLSX, XLS)  
+    - Excel spreadsheets (XLSX, XLS)
     - PowerPoint presentations (PPTX, PPT)
     
-    **⚡ Advanced Features:**
+    **Advanced Features:**
     - Semantic search with sentence transformers
     - Document versioning and change tracking
     - Multiple AI model support (OpenAI, Google, Anthropic)
     - Web search integration
     - FAQ fallback system
     
-    **🔄 How it works:**
+    **How it works:**
     1. Upload documents using the clean '+' button
     2. Advanced embeddings create semantic understanding
     3. Smart search finds relevant content across all formats
     4. AI generates comprehensive answers
     5. Version tracking maintains document history
     
-    **🔍 Search Options:**
+    **Search Options:**
     - 🌐 Web Search - Click the globe icon
     - 📎 Instant document analysis - Upload and ask
     - 📚 Knowledge base search - Select specific documents
-    
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    """)
