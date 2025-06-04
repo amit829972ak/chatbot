@@ -1,178 +1,206 @@
 import streamlit as st
 import os
-from vector_store import update_index_from_file, remove_from_index
+import tempfile
+from utils.vector_store import update_index_from_file, remove_from_index
 
-# Directory to store uploaded documents
 UPLOAD_DIR = "uploaded_docs"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 def handle_upload():
     """Handle document upload through sidebar."""
-    st.sidebar.subheader("Upload Document")
     
     # Initialize session state for upload process
     if 'upload_state' not in st.session_state:
         st.session_state['upload_state'] = {
-            'file_uploaded': False,
             'message': "",
             'processing': False
         }
     
-    # File uploader widget
+    # Custom CSS for clean upload button
+    st.sidebar.markdown("""
+    <style>
+    .upload-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin: 10px 0;
+    }
+    .upload-button {
+        width: 60px;
+        height: 60px;
+        border: 2px dashed #0EA5E9;
+        border-radius: 8px;
+        background-color: transparent;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        margin-bottom: 10px;
+    }
+    .upload-button:hover {
+        background-color: #f0f9ff;
+        border-color: #0b8bcf;
+    }
+    .upload-plus {
+        font-size: 24px;
+        color: #0EA5E9;
+        font-weight: bold;
+    }
+    .upload-text {
+        font-size: 12px;
+        color: #64748b;
+        text-align: center;
+        margin-top: 5px;
+    }
+    div[data-testid="stFileUploader"] > div > div > div > button {
+        display: none;
+    }
+    div[data-testid="stFileUploader"] > div > div > small {
+        display: none;
+    }
+    div[data-testid="stFileUploader"] > div > div {
+        text-align: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # File uploader widget with new formats
     file = st.sidebar.file_uploader(
-        "Select file", 
-        type=["pdf", "txt", "docx"], 
+        "+", 
+        type=["pdf", "txt", "docx", "xlsx", "xls", "pptx", "ppt"], 
         accept_multiple_files=False,
-        help="Upload PDF, TXT, or DOCX files to be indexed for RAG",
-        key="doc_uploader"
+        help="Upload documents to be indexed: PDF, TXT, DOCX, XLSX, PPTX",
+        key="doc_uploader",
+        label_visibility="collapsed"
     )
     
     # Display upload button only when a file is selected
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        upload_button = st.button(
-            "Upload and Index",
-            key="upload_doc_button",
-            disabled=file is None or st.session_state['upload_state']['processing']
-        )
+        if file is not None:
+            upload_clicked = st.button("📤 Upload", help="Upload and process the document")
+        else:
+            upload_clicked = False
     
-    # Handle file processing on button click (without page reload)
-    if upload_button and file is not None and not st.session_state['upload_state']['processing']:
-        # Mark as processing to prevent multiple submissions
+    # Handle file upload
+    if upload_clicked and file is not None:
         st.session_state['upload_state']['processing'] = True
         
         try:
-            # Show processing indicator
-            status_placeholder = st.sidebar.empty()
-            status_placeholder.info("Processing document... please wait")
+            # Create upload directory if it doesn't exist
+            os.makedirs(UPLOAD_DIR, exist_ok=True)
             
-            # Create file path and save file
-            filepath = os.path.join(UPLOAD_DIR, file.name)
-            with open(filepath, "wb") as f:
-                f.write(file.getvalue())
+            # Save uploaded file
+            file_path = os.path.join(UPLOAD_DIR, file.name)
+            with open(file_path, "wb") as f:
+                f.write(file.getbuffer())
             
-            # Process and index the file
-            update_index_from_file(filepath)
+            # Process the file and update the vector index
+            with st.spinner(f"Processing {file.name}..."):
+                success = update_index_from_file(file_path)
             
-            # Update status
-            st.session_state['upload_state']['file_uploaded'] = True
-            st.session_state['upload_state']['message'] = f"📄 {file.name} uploaded and indexed!"
-            status_placeholder.success(st.session_state['upload_state']['message'])
-            
+            if success:
+                st.session_state['upload_state'] = {
+                    'message': f"✅ Successfully uploaded and indexed: {file.name}",
+                    'processing': False
+                }
+                st.success(f"Successfully uploaded and indexed: {file.name}")
+                st.rerun()
+            else:
+                st.session_state['upload_state'] = {
+                    'message': f"❌ Failed to process: {file.name}",
+                    'processing': False
+                }
+                st.error(f"Failed to process: {file.name}")
+                
+                # Remove the file if processing failed
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                    
         except Exception as e:
-            error_msg = f"Error uploading document: {str(e)}"
-            st.session_state['upload_state']['message'] = error_msg
-            st.sidebar.error(error_msg)
-            
-        finally:
-            # Mark processing as complete
-            st.session_state['upload_state']['processing'] = False
+            st.session_state['upload_state'] = {
+                'message': f"❌ Error uploading {file.name}: {str(e)}",
+                'processing': False
+            }
+            st.error(f"Error uploading {file.name}: {str(e)}")
     
-    # Show status messages based on upload state
-    elif st.session_state['upload_state']['file_uploaded'] and not upload_button:
-        if "Error" in st.session_state['upload_state']['message']:
-            st.sidebar.error(st.session_state['upload_state']['message'])
-        else:
+    # Display upload status
+    if st.session_state['upload_state']['message']:
+        if "✅" in st.session_state['upload_state']['message']:
             st.sidebar.success(st.session_state['upload_state']['message'])
-    
-    # Button to clear the upload status
-    with col2:
-        clear_button = st.button(
-            "Clear Status",
-            key="clear_upload_status",
-            disabled=not st.session_state['upload_state']['file_uploaded']
-        )
-        
-    if clear_button:
-        # Reset the upload state
-        st.session_state['upload_state'] = {
-            'file_uploaded': False,
-            'message': "",
-            'processing': False
-        }
+        else:
+            st.sidebar.error(st.session_state['upload_state']['message'])
 
 def handle_delete():
     """Handle document deletion through sidebar."""
-    st.sidebar.subheader("Delete Document")
+    st.sidebar.subheader("Delete Documents")
     
-    # Initialize session state for delete process
-    if 'delete_state' not in st.session_state:
-        st.session_state['delete_state'] = {
-            'file_deleted': False,
-            'message': "",
-            'processing': False
-        }
-    
-    # List available documents
-    files = list_documents()
-    if files:
-        # Document selection dropdown
-        selected = st.sidebar.selectbox(
-            "Select document to delete", 
-            files, 
-            key="delete_select"
+    documents = list_documents()
+    if documents:
+        # Initialize session state for deletion
+        if 'delete_state' not in st.session_state:
+            st.session_state['delete_state'] = {
+                'selected_doc': None,
+                'confirm_delete': False,
+                'message': ""
+            }
+        
+        # Document selection
+        selected_doc = st.sidebar.selectbox(
+            "Select document to delete:",
+            options=["Select a document..."] + documents,
+            key="delete_selectbox"
         )
         
-        # Delete button and clear status in columns
-        col1, col2 = st.sidebar.columns(2)
-        with col1:
-            delete_button = st.button(
-                "Delete Document", 
-                key="delete_doc_button",
-                disabled=st.session_state['delete_state']['processing']
-            )
-        
-        # Handle document deletion on button click
-        if delete_button and not st.session_state['delete_state']['processing']:
-            # Mark as processing to prevent multiple deletions
-            st.session_state['delete_state']['processing'] = True
+        if selected_doc != "Select a document...":
+            st.session_state['delete_state']['selected_doc'] = selected_doc
             
-            try:
-                # Show processing indicator
-                status_placeholder = st.sidebar.empty()
-                status_placeholder.info("Deleting document...")
-                
-                # Delete the file
-                file_path = os.path.join(UPLOAD_DIR, selected)
-                remove_from_index(file_path)
-                os.remove(file_path)
-                
-                # Update status
-                st.session_state['delete_state']['file_deleted'] = True
-                st.session_state['delete_state']['message'] = f"🗑️ {selected} deleted"
-                status_placeholder.success(st.session_state['delete_state']['message'])
-                
-            except Exception as e:
-                error_msg = f"Error deleting document: {str(e)}"
-                st.session_state['delete_state']['message'] = error_msg
-                st.sidebar.error(error_msg)
-                
-            finally:
-                # Mark processing as complete
-                st.session_state['delete_state']['processing'] = False
-        
-        # Show status messages based on delete state
-        elif st.session_state['delete_state']['file_deleted'] and not delete_button:
-            if "Error" in st.session_state['delete_state']['message']:
-                st.sidebar.error(st.session_state['delete_state']['message'])
-            else:
-                st.sidebar.success(st.session_state['delete_state']['message'])
-        
-        # Button to clear the delete status
-        with col2:
-            clear_button = st.button(
-                "Clear Status",
-                key="clear_delete_status",
-                disabled=not st.session_state['delete_state']['file_deleted']
+            # Confirmation checkbox
+            confirm = st.sidebar.checkbox(
+                f"Confirm deletion of '{selected_doc}'",
+                key="delete_confirmation"
             )
             
-        if clear_button:
-            # Reset the delete state
-            st.session_state['delete_state'] = {
-                'file_deleted': False,
-                'message': "",
-                'processing': False
-            }
+            if confirm:
+                col1, col2 = st.sidebar.columns(2)
+                with col1:
+                    if st.button("🗑️ Delete", key="delete_button"):
+                        try:
+                            file_path = os.path.join(UPLOAD_DIR, selected_doc)
+                            
+                            # Remove from vector index
+                            with st.spinner(f"Removing {selected_doc} from index..."):
+                                index_success = remove_from_index(file_path)
+                            
+                            # Remove physical file
+                            if os.path.exists(file_path):
+                                os.remove(file_path)
+                                file_success = True
+                            else:
+                                file_success = False
+                            
+                            if index_success and file_success:
+                                st.session_state['delete_state'] = {
+                                    'selected_doc': None,
+                                    'confirm_delete': False,
+                                    'message': f"✅ Successfully deleted: {selected_doc}"
+                                }
+                                st.success(f"Successfully deleted: {selected_doc}")
+                                st.rerun()
+                            else:
+                                st.session_state['delete_state']['message'] = f"❌ Failed to delete: {selected_doc}"
+                                st.error(f"Failed to delete: {selected_doc}")
+                                
+                        except Exception as e:
+                            st.session_state['delete_state']['message'] = f"❌ Error deleting {selected_doc}: {str(e)}"
+                            st.error(f"Error deleting {selected_doc}: {str(e)}")
+                with col2:
+                    if st.button("❌ Cancel", key="cancel_delete"):
+                        st.session_state['delete_state'] = {
+                            'selected_doc': None,
+                            'confirm_delete': False,
+                            'message': ""
+                        }
     else:
         st.sidebar.info("No documents available to delete.")
 
@@ -181,3 +209,43 @@ def list_documents():
     if os.path.exists(UPLOAD_DIR):
         return sorted(os.listdir(UPLOAD_DIR))
     return []
+
+def get_document_versions():
+    """Get document version information."""
+    try:
+        from utils.vector_store import AdvancedVectorStore
+        vector_store = AdvancedVectorStore()
+        return vector_store.versions
+    except Exception as e:
+        print(f"Error getting document versions: {e}")
+        return {}
+
+def display_document_info():
+    """Display document information with versioning."""
+    versions_info = get_document_versions()
+    
+    if versions_info:
+        st.sidebar.subheader("Document Versions")
+        
+        for doc_name, version_data in versions_info.items():
+            current_version = version_data.get('current_version', 1)
+            total_versions = len(version_data.get('versions', []))
+            
+            if total_versions > 1:
+                st.sidebar.info(f"📄 {doc_name}\nVersion: {current_version}/{total_versions}")
+                
+                # Show version details in expander
+                with st.sidebar.expander(f"Version History - {doc_name}"):
+                    for version in reversed(version_data.get('versions', [])):
+                        timestamp = version.get('timestamp', 'Unknown')
+                        size = version.get('size', 0)
+                        v_num = version.get('version', 1)
+                        
+                        st.write(f"**Version {v_num}**")
+                        st.write(f"Date: {timestamp[:19].replace('T', ' ')}")
+                        st.write(f"Size: {size:,} characters")
+                        st.write("---")
+            else:
+                st.sidebar.info(f"📄 {doc_name}\nVersion: {current_version}")
+    else:
+        st.sidebar.info("No document versions available")
