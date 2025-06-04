@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from utils_vector_store import update_index_from_file, remove_from_index
+from vector_store import update_index_from_file, remove_from_index
 
 # Directory to store uploaded documents
 UPLOAD_DIR = "uploaded_docs"
